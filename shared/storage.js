@@ -135,3 +135,25 @@ export async function removeTabActivity(tabId) {
   delete activity[tabId];
   await chrome.storage.session.set({ tabActivity: activity });
 }
+
+export async function removeMultipleFromShelf(ids) {
+  const idSet = new Set(ids);
+  const shelf = await getShelf();
+  await chrome.storage.local.set({ shelf: shelf.filter(s => !idSet.has(s.id)) });
+}
+
+export async function exportData() {
+  const [rules, categories, settings, shelf] = await Promise.all([
+    getRules(), getCategories(), getSettings(), getShelf(),
+  ]);
+  return { rules, categories, settings, shelf };
+}
+
+export async function importData({ rules, categories, settings, shelf }) {
+  const writes = {};
+  if (Array.isArray(rules)) writes.rules = rules;
+  if (Array.isArray(categories)) writes.categories = categories;
+  if (settings && typeof settings === 'object') writes.settings = { ...DEFAULT_SETTINGS, ...settings };
+  if (Array.isArray(shelf)) writes.shelf = shelf;
+  await chrome.storage.local.set(writes);
+}

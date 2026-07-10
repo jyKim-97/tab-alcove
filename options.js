@@ -11,6 +11,8 @@ import {
   addCategory,
   removeCategory,
   updateCategory,
+  exportData,
+  importData,
 } from './shared/storage.js';
 
 let rules = [];
@@ -54,7 +56,10 @@ function makeTextEditable(td, ruleId, field, currentValue) {
     input.focus();
     input.select();
 
+    let committed = false;
     const commit = async () => {
+      if (committed) return;
+      committed = true;
       const raw = input.value.trim();
       if (field === 'inactiveMinutes') {
         const num = parseInt(raw, 10);
@@ -174,55 +179,147 @@ async function renderCategories() {
   const container = document.getElementById('categoriesList');
   if (!container) return;
   container.innerHTML = '';
+  if (cats.length === 0) return;
+
+  // Reuse rules-table visual identity
+  const table = document.createElement('table');
+  table.className = 'rules-table';
+  table.style.marginBottom = '12px';
+  table.innerHTML = `<thead><tr>
+    <th>Category</th>
+    <th>Action</th>
+    <th>Idle Time</th>
+    <th></th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
 
   for (const cat of cats) {
-    const card = document.createElement('div');
-    card.className = 'category-card';
+    const currentAction = cat.rule?.action ?? 'none';
+    const currentMins   = cat.rule?.inactiveMinutes ?? 60;
 
-    const cardHeader = document.createElement('div');
-    cardHeader.className = 'category-card-header';
+    // ── Main row (same columns as domain rules) ──
+    const trMain = document.createElement('tr');
+    trMain.className = 'cat-main-row';
 
-    const nameEl = document.createElement('span');
-    nameEl.className = 'category-card-name';
-    nameEl.textContent = cat.name;
-    nameEl.title = 'Double-click to rename';
-    nameEl.addEventListener('dblclick', () => {
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = cat.name;
-      input.className = 'input inline-input';
-      nameEl.replaceWith(input);
-      input.focus();
-      input.select();
+    // Name cell with chevron
+    const tdName = document.createElement('td');
+    const chevron = document.createElement('span');
+    chevron.className = 'cat-chevron';
+    chevron.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>`;
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = cat.name;
+    nameSpan.title = 'Double-click to rename';
+    nameSpan.style.cssText = 'cursor:default;font-weight:500';
+    nameSpan.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      if (tdName.querySelector('input')) return;
+      const inp = document.createElement('input');
+      inp.type = 'text'; inp.value = cat.name;
+      inp.className = 'input inline-input'; inp.style.width = '120px';
+      nameSpan.replaceWith(inp); inp.focus(); inp.select();
+      let committed = false;
       const commit = async () => {
-        const val = input.value.trim();
-        if (val && val !== cat.name) {
-          await updateCategory(cat.id, { name: val });
-        }
+        if (committed) return;
+        committed = true;
+        const val = inp.value.trim();
+        if (val && val !== cat.name) await updateCategory(cat.id, { name: val });
         renderCategories();
       };
-      input.addEventListener('keydown', e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') renderCategories(); });
-      input.addEventListener('blur', commit);
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') renderCategories(); });
+      inp.addEventListener('blur', commit);
+    });
+    tdName.appendChild(chevron);
+    tdName.appendChild(nameSpan);
+
+    // Action cell
+    const tdAction = document.createElement('td');
+    if (currentAction === 'none') {
+      tdAction.innerHTML = `<span style="color:var(--text-secondary);font-size:12px">—</span>`;
+    } else {
+      tdAction.innerHTML = actionBadge(currentAction);
+    }
+    tdAction.title = 'Double-click to edit';
+    tdAction.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      if (tdAction.querySelector('select')) return;
+      const sel = document.createElement('select');
+      sel.className = 'input inline-input';
+      ['none', 'shelf', 'close', 'ignore'].forEach(v => {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = v;
+        if (v === currentAction) o.selected = true;
+        sel.appendChild(o);
+      });
+      tdAction.innerHTML = ''; tdAction.appendChild(sel); sel.focus();
+      const commit = async () => {
+        const action = sel.value;
+        if (action === 'none') await updateCategory(cat.id, { rule: null });
+        else await updateCategory(cat.id, { rule: { action, inactiveMinutes: currentMins } });
+        showToast('Rule saved.'); renderCategories();
+      };
+      sel.addEventListener('change', commit);
+      sel.addEventListener('keydown', e => { if (e.key === 'Escape') renderCategories(); });
+      sel.addEventListener('blur', () => setTimeout(renderCategories, 150));
     });
 
-    const delBtn = document.createElement('button');
-    delBtn.className = 'icon-btn-sm';
-    delBtn.title = 'Delete category';
-    delBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
-    delBtn.addEventListener('click', async () => {
+    // Time cell
+    const tdTime = document.createElement('td');
+    if (currentAction !== 'none' && currentAction !== 'ignore') {
+      tdTime.textContent = formatMinutes(currentMins);
+      tdTime.title = 'Double-click to edit';
+      tdTime.style.cursor = 'default';
+      tdTime.addEventListener('dblclick', e => {
+        e.stopPropagation();
+        if (tdTime.querySelector('input')) return;
+        const inp = document.createElement('input');
+        inp.type = 'number'; inp.min = 1; inp.value = currentMins;
+        inp.className = 'input inline-input'; inp.style.width = '70px';
+        tdTime.innerHTML = ''; tdTime.appendChild(inp); inp.focus(); inp.select();
+        let committed = false;
+        const commit = async () => {
+          if (committed) return;
+          committed = true;
+          const mins = parseInt(inp.value, 10);
+          if (isNaN(mins) || mins < 1) { renderCategories(); return; }
+          await updateCategory(cat.id, { rule: { action: currentAction, inactiveMinutes: mins } });
+          showToast('Rule saved.'); renderCategories();
+        };
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } if (e.key === 'Escape') renderCategories(); });
+        inp.addEventListener('blur', commit);
+      });
+    }
+
+    // Delete cell
+    const tdDelete = document.createElement('td');
+    tdDelete.innerHTML = `<button class="icon-btn-sm" title="Delete category">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="3 6 5 6 21 6"/>
+        <path d="M19 6l-1 14H6L5 6"/>
+        <path d="M10 11v6M14 11v6"/>
+        <path d="M9 6V4h6v2"/>
+      </svg></button>`;
+    tdDelete.querySelector('button').addEventListener('click', async e => {
+      e.stopPropagation();
       await removeCategory(cat.id);
-      renderCategories();
-      showToast('Category deleted.');
+      renderCategories(); showToast('Category deleted.');
     });
 
-    cardHeader.appendChild(nameEl);
-    cardHeader.appendChild(delBtn);
+    trMain.appendChild(tdName);
+    trMain.appendChild(tdAction);
+    trMain.appendChild(tdTime);
+    trMain.appendChild(tdDelete);
 
-    const domainsEl = document.createElement('div');
-    domainsEl.className = 'category-domains';
+    // ── Expand row (domain chips) ──
+    const trExpand = document.createElement('tr');
+    trExpand.className = 'cat-expand-row';
 
-    const renderChips = (domains) => {
-      domainsEl.innerHTML = '';
+    const tdExpand = document.createElement('td');
+    tdExpand.colSpan = 4;
+    const wrap = document.createElement('div');
+    wrap.className = 'cat-domains-wrap';
+
+    const renderChips = domains => {
+      wrap.innerHTML = '';
       for (const d of domains) {
         const chip = document.createElement('span');
         chip.className = 'domain-chip';
@@ -232,18 +329,14 @@ async function renderCategories() {
         x.addEventListener('click', async () => {
           const updated = cat.domains.filter(v => v !== d);
           await updateCategory(cat.id, { domains: updated });
-          cat.domains = updated;
-          renderChips(updated);
+          cat.domains = updated; renderChips(updated);
         });
-        chip.appendChild(x);
-        domainsEl.appendChild(chip);
+        chip.appendChild(x); wrap.appendChild(chip);
       }
       const addRow = document.createElement('div');
       addRow.className = 'add-domain-row';
       const inp = document.createElement('input');
-      inp.type = 'text';
-      inp.className = 'input';
-      inp.placeholder = 'add domain...';
+      inp.type = 'text'; inp.className = 'input'; inp.placeholder = 'add domain...';
       const addBtn = document.createElement('button');
       addBtn.className = 'btn btn-primary';
       addBtn.style.cssText = 'padding:2px 8px;font-size:11px;height:26px';
@@ -254,22 +347,28 @@ async function renderCategories() {
         if (cat.domains.includes(val)) { showToast('Domain already in category.'); return; }
         const updated = [...cat.domains, val];
         await updateCategory(cat.id, { domains: updated });
-        cat.domains = updated;
-        inp.value = '';
-        renderChips(updated);
+        cat.domains = updated; inp.value = ''; renderChips(updated);
       };
       addBtn.addEventListener('click', addDomain);
       inp.addEventListener('keydown', e => { if (e.key === 'Enter') addDomain(); });
-      addRow.appendChild(inp);
-      addRow.appendChild(addBtn);
-      domainsEl.appendChild(addRow);
+      addRow.appendChild(inp); addRow.appendChild(addBtn); wrap.appendChild(addRow);
     };
     renderChips(cat.domains);
+    tdExpand.appendChild(wrap);
+    trExpand.appendChild(tdExpand);
 
-    card.appendChild(cardHeader);
-    card.appendChild(domainsEl);
-    container.appendChild(card);
+    // Toggle expand on main row click
+    trMain.addEventListener('click', () => {
+      trMain.classList.toggle('expanded');
+      trExpand.classList.toggle('open');
+    });
+
+    tbody.appendChild(trMain);
+    tbody.appendChild(trExpand);
   }
+
+  table.appendChild(tbody);
+  container.appendChild(table);
 }
 
 async function renderShelfStats() {
@@ -351,6 +450,48 @@ document.getElementById('clearShelfBtn').addEventListener('click', async () => {
   await clearShelf();
   await renderShelfStats();
   showToast('Shelf cleared.');
+});
+
+document.getElementById('exportBtn').addEventListener('click', async () => {
+  const data = await exportData();
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `tab-alcove-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Data exported.');
+});
+
+document.getElementById('importFile').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data || typeof data !== 'object') throw new Error('Invalid format');
+    if (!confirm('This will overwrite your current rules, categories, settings, and shelf. Continue?')) {
+      e.target.value = '';
+      return;
+    }
+    await importData(data);
+    rules = await getRules();
+    renderRules();
+    await renderCategories();
+    await renderShelfStats();
+    const { enabled, retentionDays, defaultAction, defaultInactiveMinutes } = await getSettings();
+    document.getElementById('enabledToggle').checked = enabled;
+    document.getElementById('retentionDays').value = String(retentionDays);
+    document.getElementById('defaultAction').value = defaultAction;
+    document.getElementById('defaultInactiveMinutes').value = String(defaultInactiveMinutes);
+    document.getElementById('defaultInactiveMinutes').style.display = defaultAction === 'none' ? 'none' : '';
+    showToast('Data imported successfully.');
+  } catch {
+    showToast('Import failed: invalid file.');
+  }
+  e.target.value = '';
 });
 
 init();

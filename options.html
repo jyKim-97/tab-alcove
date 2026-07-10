@@ -22,7 +22,7 @@
     .page-subtitle {
       font-size: 13px;
       color: var(--text-secondary);
-      margin-bottom: 32px;
+      margin-bottom: 28px;
     }
 
     /* Section */
@@ -33,9 +33,10 @@
     .section-title {
       font-size: 14px;
       font-weight: 600;
-      margin-bottom: 12px;
+      color: var(--text-primary);
+      margin-bottom: 14px;
       padding-bottom: 8px;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 2px solid var(--accent);
     }
 
     /* Toggle */
@@ -149,9 +150,10 @@
       font-weight: 500;
     }
 
-    .action-close  { background: rgba(224,80,64,0.15);  color: #e07060; }
-    .action-shelf  { background: rgba(196,86,28,0.18);  color: #d4763c; }
-    .action-ignore { background: rgba(154,132,104,0.18); color: #9a8468; }
+    .action-close  { background: rgba(224,80,64,0.18);  color: #e8786a; }
+    .action-shelf  { background: rgba(196,86,28,0.22);  color: #e08040; }
+    .action-ignore { background: rgba(192,170,144,0.18); color: #c0aa90; }
+    .action-none   { background: rgba(192,170,144,0.10); color: var(--text-secondary); }
 
     /* Action legend */
     .action-legend {
@@ -169,7 +171,7 @@
       align-items: baseline;
       gap: 10px;
       font-size: 12px;
-      color: var(--text-secondary);
+      color: var(--text-primary);
       line-height: 1.45;
     }
 
@@ -184,7 +186,6 @@
       color: var(--text-secondary);
       margin-top: 6px;
       margin-bottom: 12px;
-      opacity: 0.7;
     }
 
     /* Editable cells */
@@ -235,8 +236,8 @@
 
     .form-label {
       font-size: 11px;
-      font-weight: 500;
-      color: var(--text-secondary);
+      font-weight: 600;
+      color: var(--text-primary);
       text-transform: uppercase;
       letter-spacing: 0.4px;
     }
@@ -285,33 +286,6 @@
       color: var(--text-secondary);
     }
 
-    /* Categories */
-    .category-card {
-      background: var(--surface);
-      border-radius: var(--radius);
-      margin-bottom: 8px;
-      overflow: hidden;
-    }
-    .category-card-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 9px 12px;
-      border-bottom: 1px solid var(--border);
-    }
-    .category-card-name {
-      flex: 1;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: default;
-    }
-    .category-domains {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      padding: 10px 12px;
-      align-items: center;
-    }
     .domain-chip {
       display: inline-flex;
       align-items: center;
@@ -330,6 +304,53 @@
       transition: color 0.1s;
     }
     .domain-chip button:hover { color: var(--danger); }
+    /* Categories accordion table — reuses rules-table visuals */
+    .cat-main-row { cursor: pointer; }
+    .cat-main-row:hover td { background: rgba(255,255,255,0.025); }
+    .cat-main-row.expanded > td:first-child .cat-chevron { transform: rotate(90deg); }
+
+    .cat-chevron {
+      display: inline-flex;
+      align-items: center;
+      margin-right: 7px;
+      transition: transform 0.15s;
+      color: var(--text-secondary);
+      vertical-align: middle;
+    }
+    .cat-main-row.expanded .cat-chevron { color: var(--accent); }
+
+    .cat-expand-row { display: none; }
+    .cat-expand-row.open { display: table-row; }
+    .cat-expand-row td {
+      padding: 10px 12px 10px 32px;
+      background: color-mix(in srgb, var(--bg) 55%, var(--surface) 45%);
+      border-bottom: 1px solid var(--border);
+    }
+    .cat-expand-row:hover td {
+      background: color-mix(in srgb, var(--bg) 55%, var(--surface) 45%);
+    }
+    .cat-domains-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .precedence-note {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      padding: 9px 12px;
+      background: rgba(196,86,28,0.08);
+      border: 1px solid rgba(196,86,28,0.2);
+      border-radius: var(--radius);
+      font-size: 12px;
+      color: var(--text-primary);
+      margin-bottom: 12px;
+    }
+    .precedence-note strong { color: var(--accent); font-weight: 600; }
+
+
     .add-domain-row {
       display: flex;
       gap: 6px;
@@ -475,7 +496,11 @@
   <!-- Categories -->
   <div class="section">
     <div class="section-title">Categories</div>
-    <p class="edit-hint" style="margin-bottom:12px">Group multiple domains under one label in the sidebar. Domains not in any category appear individually.</p>
+    <p class="edit-hint" style="margin-bottom:10px">Group multiple domains under one label in the popup sidebar.</p>
+    <div class="precedence-note">
+      <strong>Priority:</strong>
+      <span>Individual domain rules always override the category action. A domain with its own rule ignores the category action entirely.</span>
+    </div>
     <div id="categoriesList"></div>
     <div class="add-rule-form" style="grid-template-columns:1fr auto;margin-top:8px">
       <div class="form-field">
@@ -512,6 +537,31 @@
     <div class="setting-row">
       <span class="setting-label">Clear entire shelf</span>
       <button class="btn btn-danger" id="clearShelfBtn">Clear All</button>
+    </div>
+  </div>
+
+  <!-- Data -->
+  <div class="section">
+    <div class="section-title">Data</div>
+    <p class="edit-hint" style="margin-bottom:12px">Export all rules, categories, settings, and shelf as a JSON backup. Import to restore on another device or after reinstall.</p>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" id="exportBtn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        Export Alcove
+      </button>
+      <label class="btn btn-ghost" style="cursor:pointer">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Import Alcove
+        <input type="file" id="importFile" accept=".json" style="display:none">
+      </label>
     </div>
   </div>
 

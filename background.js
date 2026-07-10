@@ -1,5 +1,6 @@
 import {
   getRules,
+  getCategories,
   getSettings,
   getShelf,
   addToShelf,
@@ -24,8 +25,13 @@ function getDomain(url) {
   }
 }
 
-function findRule(rules, domain) {
-  return rules.find(r => r.domain === domain) ?? null;
+// Priority: individual domain rule > category rule > null
+function resolveRule(rules, categories, domain) {
+  const domainRule = rules.find(r => r.domain === domain);
+  if (domainRule) return domainRule;
+  const cat = categories.find(c => c.domains.includes(domain));
+  if (cat?.rule) return cat.rule;
+  return null;
 }
 
 async function sendToShelf(tab, inactiveDuration = 0) {
@@ -45,7 +51,7 @@ async function checkInactiveTabs() {
   const settings = await getSettings();
   if (!settings.enabled) return;
 
-  const rules = await getRules();
+  const [rules, categories] = await Promise.all([getRules(), getCategories()]);
   const activity = await getTabActivity();
   const now = Date.now();
 
@@ -58,7 +64,7 @@ async function checkInactiveTabs() {
     const domain = getDomain(tab.url);
     if (!domain) continue;
 
-    const rule = findRule(rules, domain);
+    const rule = resolveRule(rules, categories, domain);
 
     let action, thresholdMs;
     if (rule) {
@@ -81,7 +87,7 @@ async function checkInactiveTabs() {
     if (action === 'shelf') {
       await sendToShelf(tab, inactiveMs);
     }
-    chrome.tabs.remove(tab.id);
+    chrome.tabs.remove(tab.id).catch(() => {});
     await removeTabActivity(tab.id);
   }
 
@@ -143,7 +149,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab || isIgnoredUrl(tab.url)) return;
 
   await sendToShelf(tab);
-  chrome.tabs.remove(tab.id);
+  chrome.tabs.remove(tab.id).catch(() => {});
   await removeTabActivity(tab.id);
 });
 
@@ -155,7 +161,7 @@ async function shelfAllOpenTabs(windowId) {
     if (tab.pinned) continue;
     if (isIgnoredUrl(tab.url)) continue;
     await sendToShelf(tab);
-    chrome.tabs.remove(tab.id);
+    chrome.tabs.remove(tab.id).catch(() => {});
     await removeTabActivity(tab.id);
     count++;
   }

@@ -33,6 +33,7 @@
     }
 
     .shelf-all-btn {
+      position: relative;
       display: flex;
       align-items: center;
       gap: 5px;
@@ -47,6 +48,25 @@
     }
     .shelf-all-btn:hover { background: var(--accent); color: #fff; }
     .shelf-all-btn:disabled { opacity: 0.45; cursor: default; }
+    .shelf-all-btn[data-tooltip]::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      top: calc(100% + 5px);
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 4px 8px;
+      font-size: 11px;
+      white-space: nowrap;
+      color: var(--text-primary);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.12s;
+      z-index: 200;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .shelf-all-btn[data-tooltip]:hover::after { opacity: 1; }
 
     .icon-btn {
       position: relative;
@@ -98,28 +118,47 @@
 
     .move-cat-dropdown {
       position: absolute;
-      top: calc(100% + 2px);
-      right: 14px;
-      background: var(--surface);
-      border: 1px solid var(--border);
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      background: #383836;
+      border: 1px solid #505050;
+      border-left: 3px solid var(--accent);
       border-radius: var(--radius);
-      box-shadow: 0 4px 16px rgba(0,0,0,0.45);
-      min-width: 148px;
+      box-shadow: 0 10px 28px rgba(0,0,0,0.65);
+      max-height: 240px;
+      overflow-y: auto;
       z-index: 100;
-      overflow: hidden;
+    }
+    .move-cat-dropdown::-webkit-scrollbar { width: 4px; }
+    .move-cat-dropdown::-webkit-scrollbar-track { background: transparent; }
+    .move-cat-dropdown::-webkit-scrollbar-thumb { background: #505050; border-radius: 2px; }
+    .move-cat-header {
+      position: sticky;
+      top: 0;
+      padding: 6px 12px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--accent);
+      border-bottom: 1px solid #505050;
+      background: #2e2e2c;
+      z-index: 1;
     }
     .move-cat-item {
-      padding: 7px 12px;
-      font-size: 12px;
+      padding: 9px 12px;
+      font-size: 13px;
       cursor: pointer;
       color: var(--text-primary);
       transition: background 0.1s;
     }
-    .move-cat-item:hover { background: var(--surface-hover); }
+    .move-cat-item:hover { background: #444442; color: var(--accent); }
     .move-cat-empty {
-      padding: 7px 12px;
-      font-size: 12px;
+      padding: 9px 12px;
+      font-size: 13px;
       color: var(--text-secondary);
+      font-style: italic;
     }
 
     /* ── List ── */
@@ -364,7 +403,7 @@
         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
       </svg>
     </button>
-    <button class="shelf-all-btn" id="shelfAllBtn" title="Shelf all open tabs in this window">
+    <button class="shelf-all-btn" id="shelfAllBtn" data-tooltip="Shelf all tabs in the current window">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
         <polyline points="17 8 12 3 7 8"/>

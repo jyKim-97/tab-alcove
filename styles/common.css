@@ -1,10 +1,10 @@
 :root {
-  --bg:           #141008;
-  --surface:      #1f1610;
-  --surface-hover:#2a2018;
-  --border:       #332818;
-  --text-primary: #f0e8dc;
-  --text-secondary:#9a8468;
+  --bg:           #1f1f1e;
+  --surface:      #292929;
+  --surface-hover:#333332;
+  --border:       #3d3d3b;
+  --text-primary: #f5f0e8;
+  --text-secondary:#c0aa90;
   --accent:       #c4561c;
   --accent-hover: #b04c18;
   --accent-dim:   rgba(196, 86, 28, 0.15);

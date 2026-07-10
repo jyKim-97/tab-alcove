@@ -6,9 +6,15 @@ import {
   getCategories,
   updateCategory,
   removeFromShelf,
-  removeDomainFromShelf,
+  removeMultipleFromShelf,
   clearShelf,
 } from './shared/storage.js';
+
+const IGNORED_SCHEMES = ['chrome:', 'chrome-extension:', 'about:', 'data:', 'file:'];
+function isIgnoredUrl(url) {
+  if (!url) return true;
+  return IGNORED_SCHEMES.some(s => url.startsWith(s));
+}
 
 function formatDuration(ms) {
   const mins = Math.round(ms / 60000);
@@ -308,7 +314,7 @@ document.getElementById('settingsBtn').addEventListener('click', () => {
 
 document.getElementById('saveTabBtn').addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !tab.url || tab.url.startsWith('chrome')) return;
+  if (!tab || isIgnoredUrl(tab.url)) return;
   await addToShelf({
     id: crypto.randomUUID(),
     url: tab.url,
@@ -318,7 +324,7 @@ document.getElementById('saveTabBtn').addEventListener('click', async () => {
     shelvedAt: Date.now(),
     inactiveDuration: 0,
   });
-  chrome.tabs.remove(tab.id);
+  chrome.tabs.remove(tab.id).catch(() => {});
   shelfData = await getShelf();
   render();
 });
@@ -338,7 +344,21 @@ document.getElementById('moveToCatBtn').addEventListener('click', e => {
     return;
   }
   dropdown.innerHTML = '';
-  if (categoriesData.length === 0) {
+  const hdr = document.createElement('div');
+  hdr.className = 'move-cat-header';
+  hdr.textContent = 'Move to category';
+  dropdown.appendChild(hdr);
+
+  const expanded = getExpandedGroups();
+  const hasExpandedCategory = categoriesData.some(c => expanded.has(c.name));
+
+  if (hasExpandedCategory) {
+    const err = document.createElement('div');
+    err.className = 'move-cat-empty';
+    err.style.color = 'var(--danger)';
+    err.textContent = 'Categories cannot be nested';
+    dropdown.appendChild(err);
+  } else if (categoriesData.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'move-cat-empty';
     empty.textContent = 'No categories defined';
@@ -360,6 +380,7 @@ document.getElementById('moveToCatBtn').addEventListener('click', e => {
 
 async function moveSelectedToCategory(cat) {
   const expanded = getExpandedGroups();
+  if (categoriesData.some(c => expanded.has(c.name))) return;
   const domains = new Set();
   for (const item of shelfData) {
     const groupCat = categoriesData.find(c => c.domains.includes(item.domain));
@@ -382,37 +403,30 @@ document.getElementById('closeSelectedBtn').addEventListener('click', async () =
     const label = cat ? cat.name : item.domain;
     if (expanded.has(label)) domains.add(item.domain);
   }
-  for (const label of expanded) {
-    shelfData = shelfData.filter(s => {
-      const cat = categoriesData.find(c => c.domains.includes(s.domain));
-      return (cat ? cat.name : s.domain) !== label;
-    });
-  }
+  const idsToRemove = shelfData.filter(s => domains.has(s.domain)).map(s => s.id);
+  await removeMultipleFromShelf(idsToRemove);
   for (const domain of domains) {
-    await removeDomainFromShelf(domain);
     if (!existingRules.some(r => r.domain === domain)) {
       await addRule({ id: crypto.randomUUID(), domain, action: 'close', inactiveMinutes: 60 });
     }
   }
+  const idSet = new Set(idsToRemove);
+  shelfData = shelfData.filter(s => !idSet.has(s.id));
   render(new Set());
 });
 
 // Remove selected from shelf without restoring
 document.getElementById('dismissSelectedBtn').addEventListener('click', async () => {
   const expanded = getExpandedGroups();
-  for (const label of expanded) {
-    const ids = shelfData
-      .filter(s => {
-        const cat = categoriesData.find(c => c.domains.includes(s.domain));
-        return (cat ? cat.name : s.domain) === label;
-      })
-      .map(s => s.id);
-    for (const id of ids) await removeFromShelf(id);
-    shelfData = shelfData.filter(s => {
+  const idsToRemove = shelfData
+    .filter(s => {
       const cat = categoriesData.find(c => c.domains.includes(s.domain));
-      return (cat ? cat.name : s.domain) !== label;
-    });
-  }
+      return expanded.has(cat ? cat.name : s.domain);
+    })
+    .map(s => s.id);
+  await removeMultipleFromShelf(idsToRemove);
+  const idSet = new Set(idsToRemove);
+  shelfData = shelfData.filter(s => !idSet.has(s.id));
   render(new Set());
 });
 
@@ -458,12 +472,25 @@ document.getElementById('shelfAllBtn').addEventListener('click', async () => {
   const btn = document.getElementById('shelfAllBtn');
   btn.disabled = true;
   btn.textContent = 'Saving...';
-  chrome.runtime.sendMessage({ type: 'SHELF_ALL_TABS' }, async () => {
+  const win = await chrome.windows.getCurrent();
+  chrome.runtime.sendMessage({ type: 'SHELF_ALL_TABS', windowId: win.id }, async () => {
     shelfData = await getShelf();
     render();
     btn.disabled = false;
     btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Shelf All Tabs`;
   });
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if (changes.categories) {
+    categoriesData = changes.categories.newValue ?? [];
+    render();
+  }
+  if (changes.shelf) {
+    shelfData = changes.shelf.newValue ?? [];
+    render();
+  }
 });
 
 loadShelf();
