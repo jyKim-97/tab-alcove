@@ -2,6 +2,8 @@
 
 A Chrome extension (Manifest V3) that automatically closes or shelves inactive browser tabs based on domain rules — so your workspace stays clean without losing anything important.
 
+![Tab Alcove screenshot](screenshot.png)
+
 ## Features
 
 - **Domain Rules** — Set per-domain actions: `shelf` (save & close), `close` (close silently), or `ignore` (never touch)
