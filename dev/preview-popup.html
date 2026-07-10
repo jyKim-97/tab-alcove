@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Tab Shelf — Popup Preview</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      background: #0a0a0a;
+      height: 100%;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .wrapper {
+      display: flex;
+      flex-direction: column;
+      width: 360px;
+      border-left: 1px solid #333;
+      border-right: 1px solid #333;
+      position: relative;
+    }
+    .dev-banner {
+      background: #78350f;
+      color: #fde68a;
+      font-size: 11px;
+      text-align: center;
+      padding: 4px 8px;
+      letter-spacing: 0.3px;
+      flex-shrink: 0;
+    }
+    iframe {
+      flex: 1;
+      border: none;
+      display: block;
+      width: 100%;
+    }
+    .resize-hint {
+      position: absolute;
+      bottom: 8px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: #555;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="dev-banner">PREVIEW — dummy data · Side Panel 시뮬레이션</div>
+    <iframe src="panel-inner.html" id="frame"></iframe>
+    <div class="resize-hint">← 실제 사이드 패널에서는 이 너비를 드래그로 조절 가능 →</div>
+  </div>
+  <script>
+    // Allow wrapper to be resized like a real side panel
+    const wrapper = document.querySelector('.wrapper');
+    let dragging = false, startX, startW;
+    wrapper.addEventListener('mousedown', e => {
+      if (e.offsetX < 6) {
+        dragging = true;
+        startX = e.clientX;
+        startW = wrapper.offsetWidth;
+        document.body.style.cursor = 'ew-resize';
+        e.preventDefault();
+      }
+    });
+    document.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      const delta = startX - e.clientX;
+      wrapper.style.width = Math.max(280, Math.min(600, startW + delta)) + 'px';
+    });
+    document.addEventListener('mouseup', () => {
+      dragging = false;
+      document.body.style.cursor = '';
+    });
+  </script>
+</body>
+</html>
